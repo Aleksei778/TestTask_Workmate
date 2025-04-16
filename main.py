@@ -1,6 +1,11 @@
 import argparse
 from logs_analyzer import HandlersReport
+import concurrent.futures as cf
 
+def process_log_file(filepath: str):
+    analyzer = HandlersReport()
+    analyzer.process_log_file(file_path=filepath)
+    return analyzer
 
 def main():
     parser = argparse.ArgumentParser(description='Django log analyzer')
@@ -9,19 +14,14 @@ def main():
 
     args = parser.parse_args()
 
-    analyzers = []
-    for filepath in args.logfiles:
-        t = HandlersReport()
-        t.process_log_file(file_path=filepath)
-        analyzers.append(t)
-    print(analyzers)
-    analyzers[0].merge_other_handler(analyzers[1])
-    for i in range(1, len(analyzers) - 1):
-        analyzers[0].merge_other_handler(analyzers[i])
-        print(analyzers[0].handlers)
-    
-    print(analyzers[0])
-    print(analyzers[0].print_info())
+    with cf.ProcessPoolExecutor() as executor:
+        analyzers = list(executor.map(process_log_file, args.logfiles))
+
+    main_analyzer = analyzers[0]
+    for analyzer in analyzers[1:]:
+        main_analyzer.merge_other_handler(analyzer)
+
+    print(main_analyzer.print_info())
 
 if __name__ == "__main__":
     main()

@@ -13,15 +13,18 @@ class LogLevel(Enum):
     WARNING = "WARNING"
     CRITICAL = "CRITICAL"
 
+def create_default_log_counters() -> Dict[str, LogLevel]:
+    return {
+        LogLevel.INFO: 0,
+        LogLevel.ERROR: 0,
+        LogLevel.DEBUG: 0,
+        LogLevel.CRITICAL: 0,
+        LogLevel.WARNING: 0
+    }
+
 class HandlersReport:
     def __init__(self):
-        self.handlers: Dict[str, Dict[str, LogLevel]] = defaultdict(lambda: {
-            LogLevel.INFO: 0,
-            LogLevel.ERROR: 0,
-            LogLevel.DEBUG: 0,
-            LogLevel.CRITICAL: 0,
-            LogLevel.WARNING: 0
-        })
+        self.handlers: Dict[str, Dict[str, LogLevel]] = defaultdict(create_default_log_counters)
         self.total_requests = 0
 
     def process_line(self, line: str) -> Tuple[str, str] | None:
