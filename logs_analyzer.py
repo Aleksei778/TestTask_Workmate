@@ -1,6 +1,3 @@
-import argparse
-import os
-import sys
 from typing import Tuple, Dict
 from collections import defaultdict
 import re
@@ -27,20 +24,23 @@ class HandlersReport:
         self.handlers: Dict[str, Dict[str, LogLevel]] = defaultdict(create_default_log_counters)
         self.total_requests = 0
 
-    def process_line(self, line: str) -> Tuple[str, str] | None:
+    def process_line(self, line: str) -> Tuple[LogLevel, str] | None:
         pattern = r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} (\w+) django\.request: (?:.*?|GET|POST|PUT|DELETE|PATCH) (\/[^\s]*)'
     
         match = re.search(pattern, line)
         if match:
             log_level_str  = match.group(1)  # Уровень логирования (INFO, ERROR и т.д.)
+
+            if log_level_str not in [lvl.value for lvl in LogLevel]:
+                return
+
             log_level = LogLevel(log_level_str)
             url_path = match.group(2)   # URL путь
-            
-            if log_level not in [lvl for lvl in LogLevel]:
-                return
 
             self.handlers[url_path][log_level] += 1
             self.total_requests += 1
+
+            return (log_level, url_path)
 
     def process_log_file(self, file_path: str):
         with open(file_path, 'r', encoding='utf-8') as file:
@@ -66,7 +66,7 @@ class HandlersReport:
             level_counts = self.handlers[url_path]
             row = f"{url_path:<20}\t"
             
-            for level in [LogLevel.DEBUG, LogLevel.INFO, LogLevel.WARNING, LogLevel.ERROR, LogLevel.CRITICAL]:
+            for level in [lvl.value for lvl in LogLevel]:
                 count = level_counts[level]
                 row += f"{count:<7}\t"
 

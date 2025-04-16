@@ -1,6 +1,7 @@
 import argparse
-from logs_analyzer import HandlersReport
 import concurrent.futures as cf
+
+from logs_analyzer import HandlersReport
 
 def process_log_file(filepath: str):
     analyzer = HandlersReport()
