@@ -1,40 +1,45 @@
-from typing import Tuple, Dict
+from typing import Dict
 from collections import defaultdict
 import re
-from enum import Enum
+from abc import abstractmethod, ABC
 
-class LogLevel(Enum):
-    INFO = "INFO"
-    ERROR = "ERROR"
-    DEBUG = "DEBUG"
-    WARNING = "WARNING"
-    CRITICAL = "CRITICAL"
+LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
-def create_default_log_counters() -> Dict[str, LogLevel]:
-    return {
-        LogLevel.INFO: 0,
-        LogLevel.ERROR: 0,
-        LogLevel.DEBUG: 0,
-        LogLevel.CRITICAL: 0,
-        LogLevel.WARNING: 0
-    }
+class ReportFabric(ABC):
+    @abstractmethod
+    def process_line(self, line: str):
+        pass
 
-class HandlersReport:
+    @abstractmethod
+    def process_log_file(self, filepath: str):
+        pass
+
+    @abstractmethod
+    def merge_results(self, other_report) -> 'ReportFabric':
+        pass
+
+    @abstractmethod
+    def generate_report(self) -> str:
+        pass
+
+def create_default_log_counters() -> Dict[str, int]:
+    return {level: 0 for level in LOG_LEVELS}
+
+class HandlersReport(ReportFabric):
     def __init__(self):
-        self.handlers: Dict[str, Dict[str, LogLevel]] = defaultdict(create_default_log_counters)
+        self.handlers: Dict[str, Dict[str, int]] = defaultdict(create_default_log_counters)
         self.total_requests = 0
 
-    def process_line(self, line: str) -> Tuple[LogLevel, str] | None:
+    def process_line(self, line: str):
         pattern = r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} (\w+) django\.request: (?:.*?|GET|POST|PUT|DELETE|PATCH) (\/[^\s]*)'
     
         match = re.search(pattern, line)
         if match:
-            log_level_str  = match.group(1)  # Уровень логирования (INFO, ERROR и т.д.)
+            log_level  = match.group(1)  # Уровень логирования (INFO, ERROR и т.д.)
 
-            if log_level_str not in [lvl.value for lvl in LogLevel]:
+            if log_level not in LOG_LEVELS:
                 return
 
-            log_level = LogLevel(log_level_str)
             url_path = match.group(2)   # URL путь
 
             self.handlers[url_path][log_level] += 1
@@ -47,29 +52,37 @@ class HandlersReport:
             for line in file:
                 self.process_line(line)
 
-    def merge_other_handler(self, other_handler: 'HandlersReport') -> 'HandlersReport':
-        for url_path, logs_levels in other_handler.handlers.items():
-            for log_level, count in logs_levels.items():
-                self.handlers[url_path][log_level] += count
-        
-        self.total_requests += other_handler.total_requests
+    def merge_results(self, other_report) -> 'ReportFabric':
+        if hasattr(other_report, 'handlers') and hasattr(other_report, 'total_requests'):
+            for url_path, logs_levels in other_report.handlers.items():
+                for log_level, count in logs_levels.items():
+                    self.handlers[url_path][log_level] += count
+            
+            self.total_requests += other_report.total_requests
 
-    def print_info(self) -> str:
+        return self
+
+    def generate_report(self) -> str:
         if not self.handlers:
             return "No requests found in logs"
         
-        result = [f"Total request: {self.total_requests}\n"]
-
-        result.append(f"{'HANDLER':<20}\t{'DEBUG':<7}\t{'INFO':<7}\t{'WARNING':<7}\t{'ERROR':<7}\t{'CRITICAL':<7}")
-
-        for url_path in self.handlers:
+        result = []
+        
+        header = f"{'HANDLER':<40}"
+        for level in LOG_LEVELS:
+            header += f"{level:<10}"
+        result.append(header)
+        
+        for url_path in sorted(self.handlers.keys()):
             level_counts = self.handlers[url_path]
-            row = f"{url_path:<20}\t"
+            row = f"{url_path:<40}"
             
-            for level in [lvl.value for lvl in LogLevel]:
+            for level in LOG_LEVELS:
                 count = level_counts[level]
-                row += f"{count:<7}\t"
-
+                row += f"{count:<10}"
+            
             result.append(row)
+        
+        result.append(f"\nTotal requests: {self.total_requests}")
         
         return "\n".join(result)
